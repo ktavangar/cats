@@ -3,24 +3,21 @@
 """
 @author: Sophia, Nora, Nondh, Lina, Bruno, Kiyan
 """
-import sys
 
 import gala.coordinates as gc
 import galstreams
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-# %%
-# import packages
+
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 from scipy.interpolate import UnivariateSpline as US
 from scipy.spatial import ConvexHull
 
-sys.path.append("../")
-from cats.inputs import stream_inputs as inputs
-from cats.pawprint.pawprint import Footprint2D, Pawprint
+from .inputs import stream_inputs as inputs
+from .pawprint.pawprint import Footprint2D, Pawprint
 
 
 def rough_pm_poly(pawprint, data, buffer=2):
@@ -52,6 +49,7 @@ def rough_pm_poly(pawprint, data, buffer=2):
             [track_pm1_min - buffer, track_pm2_max + buffer],
             [track_pm1_max + buffer, track_pm2_max + buffer],
             [track_pm1_max + buffer, track_pm2_min - buffer],
+            [track_pm1_min - buffer, track_pm2_min - buffer]
         ]
     )
 
@@ -66,8 +64,8 @@ def rough_pm_poly(pawprint, data, buffer=2):
 class ProperMotionSelection:
     def __init__(
         self,
-        stream,
         data,
+        input_dict,
         pawprint,
         #                  CMD_mask=True,
         #                  spatial_mask_on=True,
@@ -78,10 +76,11 @@ class ProperMotionSelection:
         best_pm_phi2_mean=None,
         best_pm_phi1_std=None,
         best_pm_phi2_std=None,
-        cutoff=0.95,
-        n_dispersion_phi1=1,
-        n_dispersion_phi2=1,
+        cutoff=0.1,
+        n_dispersion_phi1=3,
+        n_dispersion_phi2=3,
         refine_factor=100,
+        plot=False
     ):
         """
         stream_obj: galstream object that contains stream's proper motion tracks
@@ -101,11 +100,11 @@ class ProperMotionSelection:
         """
 
         # stream_obj starting as galstream but then should be replaced by best values that we find
-        self.stream = stream
         self.stream_obj = pawprint.track
         self.data = data
+        self.input_dict = input_dict
         self.pawprint = pawprint
-        self.distance = inputs[stream]["distance"]
+        self.distance = self.input_dict["distance"]
         self.dist_mod = 5 * np.log10(self.distance * 1000) - 5
 
         self.cutoff = cutoff
@@ -120,12 +119,12 @@ class ProperMotionSelection:
         ####################################
         ## Make a rough proper motion cut ##
         ####################################
-        # self.rough_pm_poly, self.rough_pm_mask = self.rough_pm(buffer=2)
+        self.rough_pm_poly, self.rough_pm_mask = rough_pm_poly(self.pawprint, self.data, buffer=2)
 
         ##################################
         ## Different proper motion cuts ##
         ##################################
-        if self.stream == "GD-1":
+        if self.input_dict['short_name'] == "GD-1":
             # distance spline will instead be a distance modulus spline
             self.dist_mod_correct = spline_dist(self.data["phi1"]) - self.dist_mod
         else:
@@ -173,13 +172,13 @@ class ProperMotionSelection:
         ## Fitting for the best central pm location ##
         ##############################################
 
-        if stream == "Fjorm-M68":
+        if self.input_dict['short_name'] == "M68-Fjorm":
             print("Skipping peak pm fitting")
         else:
             print("Fitting for peak pm location")
             # Uses default best_pm_phi_mean to generate improved ones
             peak_locations = self.find_peak_location(
-                self.data, x_width=3.0, y_width=3.0, draw_histograms=False
+                self.data, x_width=3.0, y_width=3.0, draw_histograms=plot
             )
             print(
                 "Post-fitting (pm1_mean, pm2_mean, pm1_std, pm2_std): {} \n".format(
@@ -204,12 +203,6 @@ class ProperMotionSelection:
         self.pm_phi1_cosphi2 = data["pm_phi1_cosphi2_unrefl"][self.mask]
         self.pm_phi2 = data["pm_phi2_unrefl"][self.mask]
 
-        # Plot the ellipse-like cut
-        #         self.plot_pms_scatter(self.data, mask=True,
-        #                               n_dispersion_phi1=n_dispersion_phi1,
-        #                               n_dispersion_phi2=n_dispersion_phi2)
-        #         self.plot_pm_hist(self.data, pms=[self.best_pm_phi1_mean, self.best_pm_phi2_mean])
-
         ######################################################
         ## PM cut in PM space using PM gradient information ##
         ######################################################
@@ -224,15 +217,16 @@ class ProperMotionSelection:
         self.mask = self.pm12_mask & self.spatial_mask_on & self.CMD_mask
 
         # Plot the cut that accounts for PM variations
-#        self.plot_pms_scatter(
-#            self.data,
-#            mask=True,
-#            n_dispersion_phi1=n_dispersion_phi1,
-#            n_dispersion_phi2=n_dispersion_phi2,
-#        )
-#        self.plot_pm_hist(
-#            self.data, pms=[self.best_pm_phi1_mean, self.best_pm_phi2_mean]
-#        )
+        if plot:
+            self.plot_pms_scatter(
+                self.data,
+                mask=True,
+                n_dispersion_phi1=n_dispersion_phi1,
+                n_dispersion_phi2=n_dispersion_phi2,
+            )
+            self.plot_pm_hist(
+                self.data, pms=[self.best_pm_phi1_mean, self.best_pm_phi2_mean]
+            )
 
         #################################################
         ## PM cut in (phi1, pm1) and (phi1, pm2) space ##
@@ -246,10 +240,12 @@ class ProperMotionSelection:
         self.mask = self.pm1_mask & self.pm2_mask & self.spatial_mask_on & self.CMD_mask
 
         # Plot the cut in (phi1, pm1) and (phi1, pm2) space
-        #         self.plot_pms_scatter(self.data, mask=True,
+        # if plot:
+        #     self.plot_pms_scatter(self.data, mask=True,
         #                               n_dispersion_phi1=n_dispersion_phi1,
         #                               n_dispersion_phi2=n_dispersion_phi2)
-        # self.plot_pm_hist(self.data, pms=[self.best_pm_phi1_mean, self.best_pm_phi2_mean])
+        #     self.plot_pm_hist(self.data, pms=[self.best_pm_phi1_mean, self.best_pm_phi2_mean])
+            
 
         return None
 
@@ -266,7 +262,7 @@ class ProperMotionSelection:
         self.galstream_dist = self.track.distance.value
 
         # Making splines to tracks: should add weights from errors???
-        if self.stream == "Pal5":
+        if self.input_dict['short_name'] == "Pal5":
             spline_phi2 = IUS(
                 self.galstream_phi1[20:-100], self.galstream_phi2[20:-100]
             )
@@ -285,7 +281,7 @@ class ProperMotionSelection:
         #         spline_pm1 = US(self.galstream_phi1, self.galstream_pm_phi1_cosphi2, k=3, s=len(self.galstream_phi1)/1000)
         #         spline_pm2 = US(self.galstream_phi1, self.galstream_pm_phi2, k=3, s=len(self.galstream_phi1)/1000)
 
-        if self.stream == "GD-1":
+        if self.input_dict['short_name'] == "GD-1":
             spline_dist = np.poly1d(
                 [2.41e-4, 2.421e-2, 15.001]
             )  # from de Boer et al (2020)
@@ -323,9 +319,9 @@ class ProperMotionSelection:
         Initialising the proper motions polygon mask to return only contained sources.
         """
 
-        mag = inputs[self.stream]["mag"]
-        color1 = inputs[self.stream]["color1"]
-        color2 = inputs[self.stream]["color2"]
+        mag = self.input_dict["mag"]
+        color1 = self.input_dict["color1"]
+        color2 = self.input_dict["color2"]
 
         cmd_points = np.vstack(
             (
@@ -345,40 +341,6 @@ class ProperMotionSelection:
         self.CMD_mask = self.sel_cmd()
         self.mask = self.spatial_mask_on & self.CMD_mask
         self.off_mask = self.spatial_mask_off & self.CMD_mask
-
-    # def rough_pm(self, buffer=2):
-    #     """
-    #     Will return a polygon with a rough cut in proper motion space.
-    #     This aims to be ~100% complete with no thoughts about purity.
-    #     The goal is to use this cut in conjunction with the cmd cut in order
-    #     to see the stream as a clear overdensity in (phi_1, phi_2), which will
-    #     allow membership probability modeling
-    #     """
-    #     # use the galstream proper motion track
-    #     track_pm1_min = np.min(self.galstream_pm_phi1_cosphi2)
-    #     track_pm1_max = np.max(self.galstream_pm_phi1_cosphi2)
-    #     track_pm2_min = np.min(self.galstream_pm_phi2)
-    #     track_pm2_max = np.max(self.galstream_pm_phi2)
-
-    #     # make rectangular box around this region with an extra 2 mas/yr on each side
-    #     self.rough_pm_poly = np.array(
-    #         [
-    #             [track_pm1_min - buffer, track_pm2_min - buffer],
-    #             [track_pm1_min - buffer, track_pm2_max + buffer],
-    #             [track_pm1_max + buffer, track_pm2_max + buffer],
-    #             [track_pm1_max + buffer, track_pm2_min - buffer],
-    #         ]
-    #     )
-
-    #     pm_points = np.vstack(
-    #         (self.data["pm_phi1_cosphi2_unrefl"], self.data["pm_phi2_unrefl"])
-    #     ).T
-    #     self.pawprint.pmprint = Footprint2D(
-    #         self.rough_pm_poly, footprint_type="cartesian"
-    #     )
-    #     self.rough_pm_mask = self.pawprint.pmprint.inside_footprint(pm_points)
-
-    #     return self.rough_pm_poly, self.rough_pm_mask
 
     @staticmethod
     def two_dimensional_gaussian(x, y, x0, y0, sigma_x, sigma_y):

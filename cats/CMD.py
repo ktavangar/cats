@@ -19,9 +19,7 @@ from scipy.interpolate import InterpolatedUnivariateSpline, interp1d
 from scipy.signal import correlate2d
 from ugali.analysis.isochrone import factory as isochrone_factory
 
-sys.path.append("../")
-from cats.inputs import stream_inputs as inputs
-from cats.pawprint.pawprint import Footprint2D, Pawprint
+from .pawprint.pawprint import Footprint2D, Pawprint
 
 plt.rc(
     "xtick",
@@ -42,34 +40,31 @@ plt.rc(
 
 
 class Isochrone:
-    def __init__(self, stream, cat, pawprint):
+    def __init__(self, cat, input_dict, pawprint):
         """
         Defining variables loaded into class.
 
         ------------------------------------------------------------------
 
         Parameters:
-        cat = Input catalogue.
-        age = Input age of stream from galstreams and/or literature.
-        feh = Input metallicity from galstreams and/or literature.
-        distance = Input distance from galstreams and/or literature.
-        alpha = alpha/Fe
+        cat = Input catalogue
+        input_dict = dictionary of known stream properties
         pawprint = Stream multidimensional footprint
         """
 
         # Pull survey from catalog?
-        self.stream = stream
         self.cat = cat
-        self.age = inputs[stream]["age"]
-        self.feh = inputs[stream]["feh"]
-        self.distance = inputs[stream]["distance"]  # kpc
-        self.alpha = inputs[stream]["alpha"]
+        self.input_dict = input_dict
+        self.age = self.input_dict["age"]
+        self.feh = self.input_dict["feh"]
+        self.distance = self.input_dict["distance"]  # kpc
+        # self.alpha = self.input_dict["alpha"]
         self.dist_mod = 5 * np.log10(1000 * self.distance) - 5
 
         self.pawprint = pawprint
         track = self.pawprint.track.track.transform_to(self.pawprint.track.stream_frame)
 
-        if self.stream == "GD-1":
+        if self.input_dict["short_name"] == "GD-1":
             distmod_spl = np.poly1d([2.41e-4, 2.421e-2, 15.001])
             self.dist_mod_correct = distmod_spl(self.cat["phi1"]) - self.dist_mod
         else:
@@ -82,13 +77,13 @@ class Isochrone:
 
         self.x_shift = 0
         self.y_shift = 0
-        self.phot_survey = inputs[self.stream]["phot_survey"]
-        self.band1 = inputs[self.stream]["band1"]
-        self.band2 = inputs[self.stream]["band2"]
-        self.data_mag = inputs[self.stream]["mag"]
-        self.data_color1 = inputs[self.stream]["color1"]
-        self.data_color2 = inputs[self.stream]["color2"]
-        self.turnoff = inputs[self.stream]["turnoff"]
+        self.phot_survey = self.input_dict["phot_survey"]
+        self.band1 = self.input_dict["band1"]
+        self.band2 = self.input_dict["band2"]
+        self.data_mag = self.input_dict["mag"]
+        self.data_color1 = self.input_dict["color1"]
+        self.data_color2 = self.input_dict["color2"]
+        self.turnoff = self.input_dict["turnoff"]
 
         self.generate_isochrone()
         self.sel_sky()
@@ -196,7 +191,7 @@ class Isochrone:
                 band_2=self.band2,
             )
 
-            iso.afe = self.alpha
+            # iso.afe = self.alpha
 
             initial_mass, mass_pdf, actual_mass, mag_1, mag_2 = iso.sample(
                 mass_steps=4e2
@@ -242,10 +237,10 @@ class Isochrone:
         """
         tab = self.cat
         x_bins = np.arange(
-            xrange[0], xrange[1], inputs[self.stream]["bin_sizes"][0]
+            xrange[0], xrange[1], self.input_dict["bin_sizes"][0]
         )  # Used 0.03 for Jhelum
         y_bins = np.arange(
-            yrange[0], yrange[1], inputs[self.stream]["bin_sizes"][1]
+            yrange[0], yrange[1], self.input_dict["bin_sizes"][1]
         )  # Used 0.2 for Jhelum
 
         # if this is the second runthrough and a proper motion mask already exists, use that instead of the rough one

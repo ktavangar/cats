@@ -117,5 +117,34 @@ stream_inputs = odict(
                 bin_sizes=[0.03, 0.2],
             ),
         ),
+        (
+            "M92",
+            dict(
+                # galstream stuff
+                short_name="M92",
+                pawprint_id='ibata2021',
+                #pawprint_id="thomas2020",
+                # stream stuff
+                width=2,  # TOTAL width degrees, recommend 2sigma if known
+                # data stuff
+                phot_survey="PS1",
+                band1="g",
+                band2="i",
+                mag="g_0",
+                color1="g_0",
+                color2="i_0",
+                minmag=16.0,
+                maxmag=24.0,
+                # isochrone stuff
+                age=13,  # Gyr
+                feh=-1.98,
+                distance=8.5,  # kpc
+                turnoff=13,  # bright limit of polygon (default should be MS turnoff)
+                alpha=0,  # don't think we actually use this
+                scale_err=2,
+                base_err=0.075,
+                bin_sizes=[0.03, 0.2],
+            ),
+        ),
     ]
 )
